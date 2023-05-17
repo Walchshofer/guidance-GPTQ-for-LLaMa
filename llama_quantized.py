@@ -9,6 +9,10 @@ import quant
 import llama_inference_offload
 import re
 
+MODEL_DIR = '.'
+WBITS = 4
+GROUPSIZE = 128
+
 
 class LLaMAQuantized(Transformers):
     """ A HuggingFace transformers version of the LLaMA language model with Guidance support.
@@ -25,7 +29,7 @@ class LLaMAQuantized(Transformers):
             model.to(DEV)
             tokenizer = AutoTokenizer.from_pretrained(model, use_fast=False)
 
-            model = load_quantized(model, 4, 128)
+            model = load_quantized(model, WBITS, GROUPSIZE, MODEL_DIR, 0, 0, 0)
 
         super().__init__(model, tokenizer=tokenizer, device_map=device_map, **kwargs)
 
@@ -83,7 +87,7 @@ def _load_quant(model, checkpoint, wbits, groupsize=-1, faster_kernel=False, exc
     transformers.modeling_utils._init_weights = False
     torch.set_default_dtype(torch.half)
     model = AutoModelForCausalLM.from_config(
-        config, trust_remote_code=shared.args.trust_remote_code)
+        config, trust_remote_code=False)
     torch.set_default_dtype(torch.float)
     if eval:
         model = model.eval()
@@ -122,12 +126,12 @@ def find_quantized_model_file(model_name):
     if shared.args.checkpoint:
         return Path(shared.args.checkpoint)
 
-    path_to_model = Path(f'{shared.args.model_dir}/{model_name}')
+    path_to_model = Path(f'{MODEL_DIR}/{model_name}')
     pt_path = None
     priority_name_list = [
         Path(
-            f'{shared.args.model_dir}/{model_name}{hyphen}{shared.args.wbits}bit{group}{ext}')
-        for group in ([f'-{shared.args.groupsize}g', ''] if shared.args.groupsize > 0 else [''])
+            f'{MODEL_DIR}/{model_name}{hyphen}{WBITS}bit{group}{ext}')
+        for group in ([f'-{GROUPSIZE}g', ''] if GROUPSIZE > 0 else [''])
         for ext in ['.safetensors', '.pt']
         for hyphen in ['-', f'/{model_name}-', '/']
     ]
@@ -146,13 +150,13 @@ def find_quantized_model_file(model_name):
 
         if len(found_pts) > 0:
             if len(found_pts) > 1:
-                logging.warning(
+                print(
                     'More than one .pt model has been found. The last one will be selected. It could be wrong.')
 
             pt_path = found_pts[-1]
         elif len(found_safetensors) > 0:
             if len(found_pts) > 1:
-                logging.warning(
+                print(
                     'More than one .safetensors model has been found. The last one will be selected. It could be wrong.')
 
             pt_path = found_safetensors[-1]
