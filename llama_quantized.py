@@ -2,14 +2,13 @@ from pathlib import Path
 from guidance.llms._transformers import Transformers
 from guidance.llms._llm import LLM
 import torch
-from transformers import AutoConfig, AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoConfig, AutoTokenizer, AutoModelForCausalLM, LlamaTokenizer
 import transformers
 from utils import find_layers, DEV
 import quant
 import llama_inference_offload
-import re
 
-MODEL_DIR = '.'
+MODEL_DIR = '/home/models'
 WBITS = 4
 GROUPSIZE = 128
 
@@ -26,18 +25,40 @@ class LLaMAQuantized(Transformers):
 
         # load the LLaMA specific tokenizer and model
         if isinstance(model, str):
-            model.to(DEV)
-            tokenizer = AutoTokenizer.from_pretrained(model, use_fast=False)
+            model_name = model
+            model = load_quantized(model, WBITS, GROUPSIZE, MODEL_DIR, 0)
 
-            model = load_quantized(model, WBITS, GROUPSIZE, MODEL_DIR, 0, 0, 0)
+            print('Model to device')
+            model.to(DEV)
+
+            tokenizer_path = f'{MODEL_DIR}/{model_name}/'
+            print(f'Loading tokenizer from: {tokenizer_path}')
+
+            # tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=False)
+            tokenizer = LlamaTokenizer.from_pretrained(Path(tokenizer_path), clean_up_tokenization_spaces=True)
 
         super().__init__(model, tokenizer=tokenizer, device_map=device_map, **kwargs)
 
-# This function is a replacement for the load_quant function in the
-# GPTQ-for_LLaMa repository. It supports more models and branches.
 
+    @staticmethod
+    def role_start(role):
+        if role == 'user':
+            return 'USER: '
+        elif role == 'assistant':
+            return 'ASSISTANT: '
+        else:
+            return ''
+    
+    @staticmethod
+    def role_end(role):
+        if role == 'user':
+            return ''
+        elif role == 'assistant':
+            return '</s>'
+        else:
+            return ''
 
-def load_quantized(model_name, wbits, groupsize, model_dir, pre_layer, gpu_memory, cpu_memory):
+def load_quantized(model_name, wbits, groupsize, model_dir, pre_layer):
     # Select the appropriate load_quant function
     model_type = 'llama'
     if pre_layer and model_type == 'llama':
@@ -65,12 +86,13 @@ def load_quantized(model_name, wbits, groupsize, model_dir, pre_layer, gpu_memor
             pt_path), wbits, groupsize, kernel_switch_threshold=threshold)
 
         # No offload
+        print('Model to device')
         model = model.to(torch.device('cuda:0'))
 
     return model
 
 
-def _load_quant(model, checkpoint, wbits, groupsize=-1, faster_kernel=False, exclude_layers=None, kernel_switch_threshold=128, eval=True):
+def _load_quant(model, checkpoint, wbits, groupsize=-1, exclude_layers=None, eval=True):
 
     exclude_layers = exclude_layers or ['lm_head']
 
@@ -106,13 +128,16 @@ def _load_quant(model, checkpoint, wbits, groupsize=-1, faster_kernel=False, exc
     else:
         model.load_state_dict(torch.load(checkpoint), strict=False)
 
-    if shared.args.quant_attn:
+    # if shared.args.quant_attn:
+    if False:
         quant.make_quant_attn(model)
 
-    if eval and shared.args.fused_mlp:
+    # if eval and shared.args.fused_mlp:
+    if False:
         quant.make_fused_mlp(model)
 
-    if shared.args.warmup_autotune:
+    # if shared.args.warmup_autotune:
+    if False:
         quant.autotune_warmup_linear(model, transpose=not eval)
         if eval and shared.args.fused_mlp:
             quant.autotune_warmup_fused(model)
@@ -123,9 +148,6 @@ def _load_quant(model, checkpoint, wbits, groupsize=-1, faster_kernel=False, exc
 
 # Used to locate the .pt/.safetensors quantized file
 def find_quantized_model_file(model_name):
-    if shared.args.checkpoint:
-        return Path(shared.args.checkpoint)
-
     path_to_model = Path(f'{MODEL_DIR}/{model_name}')
     pt_path = None
     priority_name_list = [
