@@ -4,13 +4,8 @@ from guidance.llms._llm import LLM
 import torch
 from transformers import AutoConfig, AutoTokenizer, AutoModelForCausalLM, LlamaTokenizer
 import transformers
-from utils import find_layers, DEV
+from utils import find_layers
 import quant
-import llama_inference_offload
-
-MODEL_DIR = '/home/models'
-WBITS = 4
-GROUPSIZE = 128
 
 
 class LLaMAQuantized(Transformers):
@@ -19,22 +14,18 @@ class LLaMAQuantized(Transformers):
 
     cache = LLM._open_cache("_llama.diskcache")
 
-    def __init__(self, model, tokenizer=None, device_map=None, **kwargs):
+    def __init__(self, model_dir, model, tokenizer=None, device_map=None, wbits=4, groupsize=128, **kwargs):
         """ Create a new LLaMA model.
         """
 
         # load the LLaMA specific tokenizer and model
         if isinstance(model, str):
             model_name = model
-            model = load_quantized(model, WBITS, GROUPSIZE, MODEL_DIR, 0)
+            model = load_quantized(model, wbits, groupsize, model_dir)
 
-            print('Model to device')
-            model.to(DEV)
-
-            tokenizer_path = f'{MODEL_DIR}/{model_name}/'
+            tokenizer_path = f'{model_dir}/{model_name}/'
             print(f'Loading tokenizer from: {tokenizer_path}')
 
-            # tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, use_fast=False)
             tokenizer = LlamaTokenizer.from_pretrained(Path(tokenizer_path), clean_up_tokenization_spaces=True)
 
         super().__init__(model, tokenizer=tokenizer, device_map=device_map, **kwargs)
@@ -58,42 +49,27 @@ class LLaMAQuantized(Transformers):
         else:
             return ''
 
-def load_quantized(model_name, wbits, groupsize, model_dir, pre_layer):
-    # Select the appropriate load_quant function
-    model_type = 'llama'
-    if pre_layer and model_type == 'llama':
-        load_quant = llama_inference_offload.load_quant
-    elif model_type in ('llama', 'opt', 'gptj'):
-        load_quant = _load_quant
-    else:
-        exit()
-
+def load_quantized(model_name, wbits, groupsize, model_dir):
     # Find the quantized model weights file (.pt/.safetensors)
     path_to_model = Path(f'{model_dir}/{model_name}')
-    pt_path = find_quantized_model_file(model_name)
+    pt_path = find_quantized_model_file(model_dir, model_name, wbits, groupsize)
     if not pt_path:
         exit()
     else:
         print(f"Found the following quantized model: {pt_path}")
 
     # qwopqwop200's offload
-    if model_type == 'llama' and pre_layer:
-        model = load_quant(str(path_to_model), str(
-            pt_path), wbits, groupsize, pre_layer)
-    else:
-        threshold = False if model_type == 'gptj' else 128
-        model = load_quant(str(path_to_model), str(
-            pt_path), wbits, groupsize, kernel_switch_threshold=threshold)
+    model = _load_quant(str(path_to_model), str(
+        pt_path), wbits, groupsize)
 
-        # No offload
-        print('Model to device')
-        model = model.to(torch.device('cuda:0'))
+    # No offload
+    print('Model to device')
+    model = model.to(torch.device('cuda:0'))
 
     return model
 
 
 def _load_quant(model, checkpoint, wbits, groupsize=-1, exclude_layers=None, eval=True):
-
     exclude_layers = exclude_layers or ['lm_head']
 
     def noop(*args, **kwargs):
@@ -128,32 +104,19 @@ def _load_quant(model, checkpoint, wbits, groupsize=-1, exclude_layers=None, eva
     else:
         model.load_state_dict(torch.load(checkpoint), strict=False)
 
-    # if shared.args.quant_attn:
-    if False:
-        quant.make_quant_attn(model)
-
-    # if eval and shared.args.fused_mlp:
-    if False:
-        quant.make_fused_mlp(model)
-
-    # if shared.args.warmup_autotune:
-    if False:
-        quant.autotune_warmup_linear(model, transpose=not eval)
-        if eval and shared.args.fused_mlp:
-            quant.autotune_warmup_fused(model)
-
     model.seqlen = 2048
+
     return model
 
 
 # Used to locate the .pt/.safetensors quantized file
-def find_quantized_model_file(model_name):
-    path_to_model = Path(f'{MODEL_DIR}/{model_name}')
+def find_quantized_model_file(model_dir, model_name, wbits, groupsize):
+    path_to_model = Path(f'{model_dir}/{model_name}')
     pt_path = None
     priority_name_list = [
         Path(
-            f'{MODEL_DIR}/{model_name}{hyphen}{WBITS}bit{group}{ext}')
-        for group in ([f'-{GROUPSIZE}g', ''] if GROUPSIZE > 0 else [''])
+            f'{model_dir}/{model_name}{hyphen}{wbits}bit{group}{ext}')
+        for group in ([f'-{groupsize}g', ''] if groupsize > 0 else [''])
         for ext in ['.safetensors', '.pt']
         for hyphen in ['-', f'/{model_name}-', '/']
     ]
