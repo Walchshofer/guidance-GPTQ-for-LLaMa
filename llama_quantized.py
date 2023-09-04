@@ -12,12 +12,21 @@ class LLaMAQuantized(Transformers):
     """ A HuggingFace transformers version of the LLaMA language model with Guidance support.
     """
 
+<<<<<<< HEAD
     cache = LLM._open_cache("_llama.diskcache")
 
     def __init__(self, model_dir, model, tokenizer=None, device_map=None, wbits=4, groupsize=128, **kwargs):
         """ Create a new LLaMA model.
         """
 
+=======
+    #cache = LLM._open_cache("_llama.diskcache")
+    
+    def __init__(self, model_dir, model, tokenizer=None, device_map=None, wbits=4, groupsize=128, **kwargs):
+        """ Create a new LLaMA model.
+        """
+        self.cache = LLM().cache
+>>>>>>> 71d5560 (add guidance support)
         # load the LLaMA specific tokenizer and model
         if isinstance(model, str):
             model_name = model

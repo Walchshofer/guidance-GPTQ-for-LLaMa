@@ -1,0 +1,4 @@
+# ninja log v5
+0	12601	1693853775447804771	/home/pwalch/projects/localLLM_guidance/GPTQ-for-LLaMa-quant/build/temp.linux-x86_64-cpython-310/quant_cuda.o	d499f89a0624e5d9
+0	35325	1693853798147803778	/home/pwalch/projects/localLLM_guidance/GPTQ-for-LLaMa-quant/build/temp.linux-x86_64-cpython-310/quant_cuda_kernel.o	7a4fd6886ca4aaa5
+9	11252	1693854622067776012	/home/pwalch/projects/localLLM_guidance/GPTQ-for-LLaMa-quant/build/temp.linux-x86_64-cpython-310/quant_cuda.o	d499f89a0624e5d9
