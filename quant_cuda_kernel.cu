@@ -186,7 +186,7 @@ void vecquant4matmul_g_cuda(
   );
   dim3 threads(BLOCKWIDTH);
 
-  AT_DISPATCH_SWITCH(vec.type(), "vecquant4matmul_g_cuda",
+  AT_DISPATCH_SWITCH(vec.scalar_type(), "vecquant4matmul_g_cuda",
     AT_DISPATCH_CASE(at::ScalarType::Half, ([&] {
       VecQuant4MatMulKernel_G<<<blocks, threads>>>(
         (half2*) vec.data_ptr<scalar_t>(),

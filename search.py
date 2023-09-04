@@ -5,10 +5,7 @@ from newspaper import Article
 from sentence_transformers import SentenceTransformer
 
 
-<<<<<<< HEAD
-key = Path('.googlekey.txt').read_text(encoding='utf-8')
-cx = Path('.googlecx.txt').read_text(encoding='utf-8')
-=======
+
 from dotenv import load_dotenv
 import os
 
@@ -18,7 +15,7 @@ load_dotenv()
 # Get the GOOGLE_KEY and GOOGLE_CX from environment variables
 key = os.getenv("GOOGLE_KEY")
 cx = os.getenv("GOOGLE_CX")
->>>>>>> 71d5560 (add guidance support)
+
 
 REQUEST_TIMEOUT = 5
 NUM_SITES_TO_TRY = 6
